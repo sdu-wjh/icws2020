@@ -2,6 +2,7 @@ import argparse
 import numpy as np
 from data_loader import load_data
 from train import train
+import tensorflow as tf
 
 np.random.seed(555)
 
@@ -19,6 +20,7 @@ parser.add_argument('--item_update_mode', type=str, default='plus_transform',
                     help='how to update item at the end of each hop')
 parser.add_argument('--using_all_hops', type=bool, default=True,
                     help='whether using outputs of all hops or just the last hop when making prediction')
+parser.add_argument('--f_p', type=int, default=32, help='f_p')
 
 '''
 # default settings for Book-Crossing

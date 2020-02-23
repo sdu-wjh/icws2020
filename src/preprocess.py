@@ -7,14 +7,14 @@ THRESHOLD = dict({'movie': 4, 'book': 0, 'news': 0})
 
 
 def read_item_index_to_entity_id_file():
-    file = '../data/' + DATASET + '/item_index2entity_id_rehashed.txt'
+    file = '../data/' + DATASET + '/item_index2entity_id_rehashed.txt' # 物品Id与实体Id的映射表
     print('reading item index to entity id file: ' + file + ' ...')
     i = 0
     for line in open(file, encoding='utf-8').readlines():
         item_index = line.strip().split('\t')[0]
         satori_id = line.strip().split('\t')[1]
-        item_index_old2new[item_index] = i
-        entity_id2index[satori_id] = i
+        item_index_old2new[item_index] = i  # 物品id映射成新的序列，从0开始依次递增
+        entity_id2index[satori_id] = i      # 实体id映射成新的序列，从0开始依次递增
         i += 1
 
 
@@ -34,6 +34,7 @@ def convert_rating():
             array = list(map(lambda x: x[1:-1], array))
 
         item_index_old = array[1]
+        # 判断用户打分表中的物品是否在物品-图谱映射表里面
         if item_index_old not in item_index_old2new:  # the item is not in the final item set
             continue
         item_index = item_index_old2new[item_index_old]
@@ -41,7 +42,7 @@ def convert_rating():
         user_index_old = int(array[0])
 
         rating = float(array[2])
-        if rating >= THRESHOLD[DATASET]:
+        if rating >= THRESHOLD[DATASET]: # 这一步的目的在于构建正面评价和负面评价集合，集合中的元素为字典，表示每个用户对应正面评价和负面评价的Id集合。
             if user_index_old not in user_pos_ratings:
                 user_pos_ratings[user_index_old] = set()
             user_pos_ratings[user_index_old].add(item_index)
@@ -63,9 +64,9 @@ def convert_rating():
         for item in pos_item_set:
             writer.write('%d\t%d\t1\n' % (user_index, item))
         unwatched_set = item_set - pos_item_set
-        if user_index_old in user_neg_ratings:
-            unwatched_set -= user_neg_ratings[user_index_old]
-        for item in np.random.choice(list(unwatched_set), size=len(pos_item_set), replace=False):
+        if user_index_old in user_neg_ratings: # 表示如果该用户也存在消极评价
+            unwatched_set -= user_neg_ratings[user_index_old] # 去掉所谓的消极评价（4分一下的项目）
+        for item in np.random.choice(list(unwatched_set), size=len(pos_item_set), replace=False): # 负样本生成
             writer.write('%d\t%d\t0\n' % (user_index, item))
     writer.close()
     print('number of users: %d' % user_cnt)
@@ -116,6 +117,14 @@ def convert_kg():
 
 
 if __name__ == '__main__':
+    """
+    这个文件主要做以下事情：
+    （1）根据物品Id与实体Id的映射表，分别将他们重新索引。
+        例如，物品id：实体id=1：3，拆分成两部分物品id=1=index，实体id=3=index（index表示相同的值，方便后续使用）
+    （2）处理打分表并进行负采样，将评分大于4的user-item记为正样本，
+        负样本从“全部项目-该用户的正面评价项目-该用户的负面评价项目”集合中选择与该用户正面评价数量相等负样本
+    （3）将item-entity中的映射与知识图谱中的实体对齐（item_index2entity_id_rehashed.txt中的映射表示item在知识图谱中的对应）
+    """
     np.random.seed(555)
 
     parser = argparse.ArgumentParser()
@@ -132,3 +141,4 @@ if __name__ == '__main__':
     convert_kg()
 
     print('done')
+

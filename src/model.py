@@ -23,10 +23,22 @@ class RippleNet(object):
         self.n_memory = args.n_memory
         self.item_update_mode = args.item_update_mode
         self.using_all_hops = args.using_all_hops
+        self.f_p = args.f_p
 
     def _build_inputs(self):
         self.items = tf.placeholder(dtype=tf.int32, shape=[None], name="items")
         self.labels = tf.placeholder(dtype=tf.float64, shape=[None], name="labels")
+
+        # # [batch size, 1]
+        # self.input_items = tf.placeholder(dtype=tf.int32, shape=[None, None], name="input_items")
+
+        # ===
+        self.input_items = []
+        for i in range(1024):
+            self.input_items.append(
+                tf.placeholder(dtype=tf.int32, shape=[None], name="input_items_" + str(i)))
+        # ===
+
         self.memories_h = []
         self.memories_r = []
         self.memories_t = []
@@ -51,9 +63,29 @@ class RippleNet(object):
         # transformation matrix for updating item embeddings at the end of each hop
         self.transform_matrix = tf.get_variable(name="transform_matrix", shape=[self.dim, self.dim], dtype=tf.float64,
                                                 initializer=tf.contrib.layers.xavier_initializer())
+        # W:[dim, f_p]
+        self.w_matrix = tf.get_variable(name="w_matrix", shape=[self.dim, self.f_p], dtype=tf.float64,
+                                        initializer=tf.contrib.layers.xavier_initializer())
 
         # [batch size, dim]
-        self.item_embeddings = tf.nn.embedding_lookup(self.entity_emb_matrix, self.items)
+        # self.item_embeddings = tf.nn.embedding_lookup(self.entity_emb_matrix, self.items)
+        # self.item_embeddings_v = tf.nn.embedding_lookup(self.entity_emb_matrix, self.items)
+
+        # =====
+        self.input_items_embedding = tf.zeros([1, self.dim], dtype=tf.float64)
+        for i in range(1024):
+            self.input_items_embedding = tf.concat([self.input_items_embedding,
+                                                   tf.reduce_mean(tf.nn.embedding_lookup(self.entity_emb_matrix, self.input_items[i]), axis=0, keep_dims=True)], axis=0)
+        self.item_embeddings = self.input_items_embedding[1:1025, :]
+        self.item_embeddings_v = self.input_items_embedding[1:1025, :]
+        # =====
+
+        # # [batch size, f_p]
+        # self.input_items_embedding = tf.matmul(self.input_items_embedding, self.w_matrix)
+        # # [batch size, i_count, f_p]
+        # self.second = tf.matmul(self.input_items_embeddings, self.w_matrix)
+        #
+        # self.concat_embedding = tf.concat([self.first, self.second], axis=1)
 
         self.h_emb_list = []
         self.r_emb_list = []
@@ -70,8 +102,10 @@ class RippleNet(object):
 
         o_list = self._key_addressing()
 
-        self.scores = tf.squeeze(self.predict(self.item_embeddings, o_list))
+        self.scores = tf.squeeze(self.predict(self.item_embeddings_v, o_list))
         self.scores_normalized = tf.sigmoid(self.scores)
+
+    def _gat_attention(self):
 
     def _key_addressing(self):
         o_list = []

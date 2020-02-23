@@ -4,13 +4,13 @@ import numpy as np
 
 
 def load_data(args):
-    train_data, eval_data, test_data, user_history_dict = load_rating(args)
     n_entity, n_relation, kg = load_kg(args)
+    train_data, eval_data, test_data, user_history_dict, items_set = load_rating(args, kg)
     ripple_set = get_ripple_set(args, kg, user_history_dict)
-    return train_data, eval_data, test_data, n_entity, n_relation, ripple_set
+    return train_data, eval_data, test_data, n_entity, n_relation, ripple_set, items_set
 
 
-def load_rating(args):
+def load_rating(args, kg):
     print('reading rating file ...')
 
     # reading rating file
@@ -23,10 +23,20 @@ def load_rating(args):
 
     # n_user = len(set(rating_np[:, 0]))
     # n_item = len(set(rating_np[:, 1]))
-    return dataset_split(rating_np)
+    return dataset_split(rating_np, kg)
 
 
-def dataset_split(rating_np):
+def dataset_split(rating_np, kg):
+    """
+    该函数做了以下事情：
+    （1）对于整个的评分表，首先创建从0开始的索引，然后根据train:eval:test = 6:2:2划分数据集
+    （2）对训练集、测试集和验证集进行进一步处理，处理逻辑如下：
+        训练集：过滤掉没有正向评价记录的用户
+        测试集、验证集：选取用户存在于训练数据集并且具有正向评价记录的用户
+    （3）根据重新筛选之后的索引，过滤数据集
+    :param rating_np: user-item评分表，包括正采样和负采样两部分
+    :return:
+    """
     print('splitting dataset ...')
 
     # train:eval:test = 6:2:2
@@ -60,7 +70,19 @@ def dataset_split(rating_np):
     eval_data = rating_np[eval_indices]
     test_data = rating_np[test_indices]
 
-    return train_data, eval_data, test_data, user_history_dict
+    all_items = np.union1d(np.union1d(train_data[:, 1], eval_data[:, 1]), test_data[:, 1])
+
+    items_set = collections.defaultdict(list)
+    for head in all_items:
+        memories_t_items = []
+
+        memories_t_items.append(head)
+        for tail_and_relation in kg[head]:
+            memories_t_items.append(tail_and_relation[0])
+
+        items_set[head].append(memories_t_items)
+
+    return train_data, eval_data, test_data, user_history_dict, items_set
 
 
 def load_kg(args):
@@ -83,6 +105,9 @@ def load_kg(args):
 
 
 def construct_kg(kg_np):
+    """
+    构造一个字典，key是头实体，value是尾实体
+    """
     print('constructing knowledge graph ...')
     kg = collections.defaultdict(list)
     for head, relation, tail in kg_np:
@@ -91,6 +116,10 @@ def construct_kg(kg_np):
 
 
 def get_ripple_set(args, kg, user_history_dict):
+    """
+    用来生成多跳子图，其中user_history_dict为seed entity;
+    增加生成items图结构
+    """
     print('constructing ripple set ...')
 
     # user -> [(hop_0_heads, hop_0_relations, hop_0_tails), (hop_1_heads, hop_1_relations, hop_1_tails), ...]

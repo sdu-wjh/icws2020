@@ -1,6 +1,7 @@
 import collections
 import os
 import numpy as np
+from collections import Counter
 
 
 def load_data(args):
@@ -126,34 +127,65 @@ def get_ripple_set(args, kg, user_history_dict):
     ripple_set = collections.defaultdict(list)
 
     for user in user_history_dict:
-        for h in range(args.n_hop):
+        tails_of_last_hop = user_history_dict[user]
+        replace = len(tails_of_last_hop) < args.num_history_item
+        indices = np.random.choice(len(tails_of_last_hop), size=args.num_history_item, replace=replace)
+        tails_of_last_hop = [tails_of_last_hop[i] for i in indices]
+
+        temp_for_entity = []
+        for entity in tails_of_last_hop:
             memories_h = []
             memories_r = []
             memories_t = []
+            for tail_and_relation in kg[entity]:
+                memories_h.append(entity)
+                memories_r.append(tail_and_relation[1])
+                memories_t.append(tail_and_relation[0])
 
-            if h == 0:
-                tails_of_last_hop = user_history_dict[user]
+            memories_r_catagory = []
+            count_result = Counter(memories_r)
+            if len(count_result) >= args.num_relation:
+                for tuple in count_result.most_common(args.num_relation):
+                    memories_r_catagory.append(tuple[0])
             else:
-                tails_of_last_hop = ripple_set[user][-1][2]
+                memories_r_list = list(set(memories_r))
+                replace = len(memories_r_list) < args.num_relation
+                indices = np.random.choice(len(memories_r_list), size=args.num_relation, replace=replace)
+                memories_r_catagory = [memories_r_list[i] for i in indices]
+            temp_for_relation = []
+            for r in memories_r_catagory:
+                memories_r_index = []
+                for i in range(len(memories_r)):
+                    if memories_r[i] == r:
+                        memories_r_index.append(i)
+                replace = len(memories_r_index) < args.num_relation_count - 1
+                indices = np.random.choice(len(memories_r_index), size=args.num_relation_count - 1, replace=replace)
+                memories_r_index = [memories_r_index[i] for i in indices]
 
-            for entity in tails_of_last_hop:
-                for tail_and_relation in kg[entity]:
-                    memories_h.append(entity)
-                    memories_r.append(tail_and_relation[1])
-                    memories_t.append(tail_and_relation[0])
+                memories_h_temp = []
+                memories_r_temp = []
+                memories_t_temp = []
+                for index in memories_r_index:
+                    memories_h_temp.append(memories_h[index])
+                    memories_r_temp.append(memories_r[index])
+                    memories_t_temp.append(memories_t[index])
+                memories_h_temp.append(memories_h[index])
+                memories_r_temp.append(-1)
+                memories_t_temp.append(memories_h[index])
+                temp_for_relation.append((memories_h_temp, memories_r_temp, memories_t_temp))
+            temp_for_entity.append(temp_for_relation)
+        ripple_set[user].append(temp_for_entity)
+        # if len(memories_h) == 0:
+        #     ripple_set[user].append(ripple_set[user][-1])
+        # else:
+        #     # sample a fixed-size 1-hop memory for each user
+        #     replace = len(memories_h) < args.n_memory
+        #     indices = np.random.choice(len(memories_h), size=args.n_memory, replace=replace)
+        #     memories_h = [memories_h[i] for i in indices]
+        #     memories_r = [memories_r[i] for i in indices]
+        #     memories_t = [memories_t[i] for i in indices]
+        #     ripple_set[user].append((memories_h, memories_r, memories_t))
 
-            # if the current ripple set of the given user is empty, we simply copy the ripple set of the last hop here
-            # this won't happen for h = 0, because only the items that appear in the KG have been selected
-            # this only happens on 154 users in Book-Crossing dataset (since both BX dataset and the KG are sparse)
-            if len(memories_h) == 0:
-                ripple_set[user].append(ripple_set[user][-1])
-            else:
-                # sample a fixed-size 1-hop memory for each user
-                replace = len(memories_h) < args.n_memory
-                indices = np.random.choice(len(memories_h), size=args.n_memory, replace=replace)
-                memories_h = [memories_h[i] for i in indices]
-                memories_r = [memories_r[i] for i in indices]
-                memories_t = [memories_t[i] for i in indices]
-                ripple_set[user].append((memories_h, memories_r, memories_t))
+
 
     return ripple_set

@@ -42,16 +42,26 @@ def get_feed_dict(args, model, data, ripple_set, all_items, start, end):
     feed_dict = dict()
     feed_dict[model.items] = data[start:end, 1]
     feed_dict[model.labels] = data[start:end, 2]
-    for i in range(args.n_hop):
-        feed_dict[model.memories_h[i]] = [ripple_set[user][i][0] for user in data[start:end, 0]]
-        feed_dict[model.memories_r[i]] = [ripple_set[user][i][1] for user in data[start:end, 0]]
-        feed_dict[model.memories_t[i]] = [ripple_set[user][i][2] for user in data[start:end, 0]]
 
-    # ===
-    index = 0
-    for item in data[start:end, 1]:
-        feed_dict[model.input_items[index]] = np.array(all_items[item][0])
-        index += 1
+    for i in range(args.num_history_item):
+        for j in range(args.num_relation):
+            feed_dict[model.inter_item_list[i][j][0]] = np.array([ripple_set[user][0][i][j][0][0]for user in data[start:end, 0]])
+            feed_dict[model.inter_item_list[i][j][1]] = np.array([ripple_set[user][0][i][j][2] for user in data[start:end, 0]])
+
+    # for i in range(args.n_hop):
+    #     feed_dict[model.memories_h[i]] = [ripple_set[user][i][0] for user in data[start:end, 0]]
+    #     feed_dict[model.memories_r[i]] = [ripple_set[user][i][1] for user in data[start:end, 0]]
+    #     feed_dict[model.memories_t[i]] = [ripple_set[user][i][2] for user in data[start:end, 0]]
+    # # ===
+    # items_array = []
+    # for item in data[start:end, 1]:
+    #     items = all_items[item][0]
+    #     while len(items) < args.num:
+    #         items.append(item)
+    #     if len(items) > args.num:
+    #         items = items[0:args.num]
+    #     items_array.append(np.array(items))
+    # feed_dict[model.input_items] = np.array(items_array)
     # ===
     return feed_dict
 
